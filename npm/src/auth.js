@@ -11,7 +11,13 @@ class AuthManager {
     }
 
     async login(apiUrl, options) {
-        let { username, password } = options;
+        let { username, password, token } = options;
+
+        if (token) {
+            await this.config.set('token', token);
+            await this.config.set('apiUrl', apiUrl);
+            return token;
+        }
 
         // Если credentials не предоставлены, запросим их
         if (!username || !password) {

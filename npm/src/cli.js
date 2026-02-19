@@ -25,6 +25,7 @@ class CLI {
             .description('Login to Mud Hosting')
             .option('-u, --username <username>', 'Username')
             .option('-p, --password <password>', 'Password')
+            .option('-t, --token <token>', 'Token (overrides username and password)')
             .option('--api <url>', 'API URL', 'http://localhost:8000')
             .action(async (options) => {
                 await this.handleLogin(options);
