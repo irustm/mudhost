@@ -1,6 +1,6 @@
 {
   "name": "mudhost",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "CLI for Hosting - deploy preview environments with one command",
   "main": "src/cli.js",
   "bin": {
