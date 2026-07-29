@@ -16,6 +16,11 @@ interface Deployment {
     createdBy?: string;
 }
 
+interface UploadedFile {
+    content: string;
+    encoding?: "utf8" | "base64";
+}
+
 interface User {
     id: string;
     username: string;
@@ -150,11 +155,20 @@ class DeploymentService {
         this.startCleanupJob();
     }
 
+    private decodeBase64(content: string): Uint8Array {
+        const binary = atob(content);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+    }
+
     async createDeployment(
         projectId: string,
         branch: string,
         commit: string,
-        files: Record<string, string>,
+        files: Record<string, string | UploadedFile>,
         createdBy?: string
     ): Promise<Deployment> {
         let deploymentId = this.sanitizeDeploymentId(`${projectId}-${branch}-${Date.now()}`);
@@ -204,14 +218,26 @@ class DeploymentService {
         };
 
         try {
-            for (const [filePath, content] of Object.entries(files)) {
+            for (const [filePath, fileData] of Object.entries(files)) {
                 const normalizedPath = filePath.replace(/\\/g, '/');
                 const fullPath = join(deploymentDir, normalizedPath);
 
                 const fileDir = dirname(fullPath);
                 await ensureDir(fileDir);
 
-                await Deno.writeTextFile(fullPath, content);
+                if (typeof fileData === "string") {
+                    await Deno.writeTextFile(fullPath, fileData);
+                } else if (fileData && typeof fileData.content === "string") {
+                    if (fileData.encoding === "base64") {
+                        await Deno.writeFile(fullPath, this.decodeBase64(fileData.content));
+                    } else if (fileData.encoding === "utf8" || fileData.encoding === undefined) {
+                        await Deno.writeTextFile(fullPath, fileData.content);
+                    } else {
+                        throw new Error(`Unsupported file encoding for ${normalizedPath}: ${fileData.encoding}`);
+                    }
+                } else {
+                    throw new Error(`Invalid file payload for ${normalizedPath}`);
+                }
                 deployment.files.push(normalizedPath);
             }
 

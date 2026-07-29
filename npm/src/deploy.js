@@ -12,6 +12,24 @@ class DeployManager {
         this.auth = new AuthManager();
     }
 
+    isValidUtf8(content) {
+        const decoded = content.toString('utf8');
+        return Buffer.from(decoded, 'utf8').equals(content);
+    }
+
+    isBinaryFile(filePath, content) {
+        const binaryExtensions = new Set([
+            'wasm', 'woff', 'woff2', 'ttf', 'otf', 'eot',
+            'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'ico',
+            'pdf', 'zip', 'gz', 'br'
+        ]);
+        const ext = path.extname(filePath).slice(1).toLowerCase();
+        if (binaryExtensions.has(ext)) {
+            return true;
+        }
+        return !this.isValidUtf8(content);
+    }
+
     async collectFiles(distDir) {
         const spinner = ora('📁 Scanning files...').start();
 
@@ -30,8 +48,18 @@ class DeployManager {
 
             for (const filePath of allFiles) {
                 const fullPath = path.join(distDir, filePath);
-                const content = await fs.readFile(fullPath, 'utf8');
-                files[filePath] = content;
+                const content = await fs.readFile(fullPath);
+                if (this.isBinaryFile(filePath, content)) {
+                    files[filePath] = {
+                        content: content.toString('base64'),
+                        encoding: 'base64'
+                    };
+                } else {
+                    files[filePath] = {
+                        content: content.toString('utf8'),
+                        encoding: 'utf8'
+                    };
+                }
             }
 
             spinner.succeed(`Found ${allFiles.length} files`);

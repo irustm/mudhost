@@ -13,8 +13,61 @@ interface DeployConfig {
     token?: string;
 }
 
-async function collectFiles(dir: string): Promise<Record<string, string>> {
-    const files: Record<string, string> = {};
+interface DeployFile {
+    content: string;
+    encoding: "utf8" | "base64";
+}
+
+const BINARY_EXTENSIONS = new Set([
+    "wasm",
+    "woff",
+    "woff2",
+    "ttf",
+    "otf",
+    "eot",
+    "png",
+    "jpg",
+    "jpeg",
+    "gif",
+    "webp",
+    "avif",
+    "ico",
+    "pdf",
+    "zip",
+    "gz",
+    "br",
+]);
+
+function isValidUtf8(content: Uint8Array): boolean {
+    try {
+        new TextDecoder("utf-8", { fatal: true }).decode(content);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function toBase64(content: Uint8Array): string {
+    let binary = "";
+    const chunkSize = 0x8000;
+
+    for (let i = 0; i < content.length; i += chunkSize) {
+        binary += String.fromCharCode(...content.subarray(i, i + chunkSize));
+    }
+
+    return btoa(binary);
+}
+
+function isBinaryFile(filePath: string, content: Uint8Array): boolean {
+    const ext = filePath.split(".").pop()?.toLowerCase();
+    if (ext && BINARY_EXTENSIONS.has(ext)) {
+        return true;
+    }
+    return !isValidUtf8(content);
+}
+
+async function collectFiles(dir: string): Promise<Record<string, DeployFile>> {
+    const files: Record<string, DeployFile> = {};
 
     try {
         console.log(`📁 Scanning directory: ${dir}`);
@@ -24,8 +77,18 @@ async function collectFiles(dir: string): Promise<Record<string, string>> {
                 const relativePath = relative(dir, entry.path).replace(/\\/g, '/');
 
                 try {
-                    const content = await Deno.readTextFile(entry.path);
-                    files[relativePath] = content;
+                    const content = await Deno.readFile(entry.path);
+                    if (isBinaryFile(relativePath, content)) {
+                        files[relativePath] = {
+                            content: toBase64(content),
+                            encoding: "base64",
+                        };
+                    } else {
+                        files[relativePath] = {
+                            content: new TextDecoder().decode(content),
+                            encoding: "utf8",
+                        };
+                    }
                 } catch (error) {
                     console.error(`  ❌ Error reading ${relativePath}:`, error);
                 }
